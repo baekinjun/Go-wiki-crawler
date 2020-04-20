@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -11,20 +13,28 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	_ "github.com/go-sql-driver/mysql"
+)
+
+const (
+	S3_REGION = "ap-northeast-2"
+	S3_BUCKET = "gowiki"
 )
 
 type ScrapeResult struct {
 	title    string
 	text     string
-	ImageURL string
+	ImageURL []string
 }
 
 type Parser interface {
 	ParsePage(*goquery.Document) ScrapeResult
 }
 
-func getRequest(url string) (*http.Response, error) {
+func getRequest(url string) (*http.Response, error) { //url 에 헤더를 추가하여 컴퓨터가아님을 우회하는 방법
 	client := &http.Client{}
 
 	req, _ := http.NewRequest("GET", url, nil)
@@ -113,11 +123,11 @@ func targetpage(startURL string, concurrency int) []string {
 	return foundLinks
 }
 
-func crawl(startURL string) []string {
+func crawl(startURL string) {
 	conn, err := sql.Open("mysql", "root:qordls7410@tcp(localhost:3306)/WIKI")
 	target := (targetpage(startURL, 2))
 	b := ScrapeResult{}
-	var image []string
+
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -134,25 +144,49 @@ func crawl(startURL string) []string {
 		doc, err := goquery.NewDocumentFromReader(resp.Body)
 
 		b.title = doc.Find("h1.firstHeading").Text()
-
-		doc.Find("div.mw-parser-output img").Each(func(i int, s *goquery.Selection) {
-			b.ImageURL, _ = s.Attr("src")
-			image = append(image, b.ImageURL)
-		})
 		doc.Find("div.mw-parser-output p").Each(func(i int, s *goquery.Selection) {
 			b.text += s.Text()
 		})
-		conn.Exec("insert into wiki_data(Title,Text,imageurl)value(?,?,?)", b.title, b.text, b.ImageURL)
+		conn.Exec("insert into wiki_data(Title,Text) value(?,?)", b.title, b.text)
 		b.text = " "
+
 	}
-	return image
 }
 
-func crawlImage(startURL string) error {
-	Image := crawl(startURL)
+func FindImageurl(startURL string) []string {
+	target := (targetpage(startURL, 2))
+	b := ScrapeResult{}
+	var image string
+	for i := 0; i < 5; i++ {
+		resp, err := http.Get(target[i])
+
+		if err != nil {
+			panic(err)
+		}
+		defer resp.Body.Close()
+
+		doc, err := goquery.NewDocumentFromReader(resp.Body)
+
+		doc.Find("div.mw-parser-output img").Each(func(i int, s *goquery.Selection) {
+			image, _ = s.Attr("src")
+			b.ImageURL = append(b.ImageURL, image)
+		})
+	}
+	return b.ImageURL
+}
+
+func ImageDownload(startURL string) error {
+	Image := FindImageurl(startURL)
 	var ImageURL []string
 	for _, a := range Image {
 		ImageURL = append(ImageURL, "https:"+a)
+	}
+	var Error error
+
+	s, err := session.NewSession(&aws.Config{Region: aws.String(S3_REGION)})
+
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	for i := 0; i < 5; i++ {
@@ -164,7 +198,7 @@ func crawlImage(startURL string) error {
 
 		defer resp.Body.Close()
 
-		out, err := os.Create(strconv.Itoa(i) + ".jpg")
+		out, err := os.Create("img/" + strconv.Itoa(i) + ".jpg")
 
 		if err != nil {
 			return err
@@ -174,12 +208,44 @@ func crawlImage(startURL string) error {
 
 		_, err = io.Copy(out, resp.Body)
 
-		return err
+		Error = err
+
+		err = AddFileTOS3(s, "img/"+strconv.Itoa(i)+".jpg")
+
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-	return nil
+	return Error
 }
 
+func AddFileTOS3(s *session.Session, fileDir string) error {
+
+	file, err := os.Open(fileDir)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	fileInfo, _ := file.Stat()
+	var size int64 = fileInfo.Size()
+	buffer := make([]byte, size)
+	file.Read(buffer)
+
+	_, err = s3.New(s).PutObject(&s3.PutObjectInput{
+		Bucket:               aws.String(S3_BUCKET),
+		Key:                  aws.String(fileDir),
+		ACL:                  aws.String("private"),
+		Body:                 bytes.NewReader(buffer),
+		ContentLength:        aws.Int64(size),
+		ContentType:          aws.String("http.DetectContentType(buffer)"),
+		ContentDisposition:   aws.String("attachment"),
+		ServerSideEncryption: aws.String("AES256"),
+	})
+	return err
+}
 func main() {
-	crawlImage("https://ko.wikipedia.org/wiki/")
+	crawl("https://ko.wikipedia.org/wiki/")
+	ImageDownload("https://ko.wikipedia.org/wiki/")
 
 }
