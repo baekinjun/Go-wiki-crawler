@@ -225,6 +225,7 @@ func AddFileTOS3(s *session.Session, fileDir string) error {
 	if err != nil {
 		return err
 	}
+
 	defer file.Close()
 
 	fileInfo, _ := file.Stat()
