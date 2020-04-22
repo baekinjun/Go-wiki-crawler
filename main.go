@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/aws/aws-sdk-go/aws"
@@ -115,7 +116,6 @@ func targetpage(startURL string, concurrency int) []string {
 
 	for i := 0; i < 5; i++ {
 		list := <-worklist
-		fmt.Println(list)
 		for _, link := range list {
 			if !seen[link] {
 				seen[link] = true
@@ -132,40 +132,85 @@ func targetpage(startURL string, concurrency int) []string {
 	return foundLinks
 }
 
-func crawl(startURL string) {
+func crawl(startURL string, wg *sync.WaitGroup) {
 
 	conn, err := sql.Open("mysql", "root:qordls7410@tcp(localhost:3306)/WIKI")
-	target := (targetpage(startURL, 5))
+	var target []string
+	worklist := make(chan []string)
+	var n int
+	n++
+	var tokens = make(chan struct{}, 10)
+	seen := make(map[string]bool)
 	b := ScrapeResult{}
-
+	baseDomain := parseStartURL(startURL)
 	if err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
-	for i := 0; i < len(target); i++ {
-		resp, err := http.Get(target[i])
+	for i := 0; i < 5; i++ {
+		list := <-worklist
+		for _, link := range list {
+			fmt.Println(link)
+			if !seen[link] {
+				seen[link] = true
+				n++
 
-		if err != nil {
-			panic(err)
+				go func(baseDomain string, token chan struct{}) {
+					target = targetpage(startURL, 5)
+					if target != nil {
+						worklist <- target
+					}
+				}(baseDomain, tokens)
+			}
+			resp, err := http.Get(list[i])
+
+			if err != nil {
+				panic(err)
+			}
+			defer resp.Body.Close()
+
+			doc, err := goquery.NewDocumentFromReader(resp.Body)
+
+			b.title = doc.Find("h1.firstHeading").Text()
+			doc.Find("div.mw-parser-output p").Each(func(i int, s *goquery.Selection) {
+				b.text += s.Text()
+			})
+			conn.Exec("insert into wiki_data(Title,Text) value(?,?)", b.title, b.text)
+			b.text = " "
 		}
-		defer resp.Body.Close()
-
-		doc, err := goquery.NewDocumentFromReader(resp.Body)
-
-		b.title = doc.Find("h1.firstHeading").Text()
-		doc.Find("div.mw-parser-output p").Each(func(i int, s *goquery.Selection) {
-			b.text += s.Text()
-		})
-		conn.Exec("insert into wiki_data(Title,Text) value(?,?)", b.title, b.text)
-		b.text = " "
-
 	}
-	fmt.Print(target)
+	// target = targetpage(startURL, 10)
+	// b := ScrapeResult{}
+
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	os.Exit(1)
+	// }
+	// fmt.Println(target)
+	// for i := 0; i < len(target); i++ {
+	// 	resp, err := http.Get(target[i])
+
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+	// 	defer resp.Body.Close()
+
+	// 	doc, err := goquery.NewDocumentFromReader(resp.Body)
+
+	// 	b.title = doc.Find("h1.firstHeading").Text()
+	// 	doc.Find("div.mw-parser-output p").Each(func(i int, s *goquery.Selection) {
+	// 		b.text += s.Text()
+	// 	})
+	// 	conn.Exec("insert into wiki_data(Title,Text) value(?,?)", b.title, b.text)
+	// 	b.text = " "
+
+	// }
 }
 
 func FindImageurl(startURL string) []string {
-	target := (targetpage(startURL, 5))
+	target := (targetpage(startURL, 2))
 	b := ScrapeResult{}
-	for i := 0; i < len(target); i++ {
+	for i := 0; i < 10; i++ {
 		resp, err := http.Get(target[i])
 
 		if err != nil {
@@ -187,7 +232,7 @@ func FindImageurl(startURL string) []string {
 	return b.ImageURL
 }
 
-func ImageDownload(startURL string) error {
+func ImageDownload(startURL string, wg *sync.WaitGroup) error {
 	Image := FindImageurl(startURL)
 	var ImageURL []string
 	for _, a := range Image {
@@ -256,9 +301,13 @@ func AddFileTOS3(s *session.Session, fileDir string) error {
 }
 
 func main() {
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-	// crawl("https://ko.wikipedia.org/wiki/")
+	go crawl("https://ko.wikipedia.org/wiki/", &wg)
 
-	ImageDownload("https://ko.wikipedia.org/wiki/")
+	go ImageDownload("https://ko.wikipedia.org/wiki/", &wg)
+
+	wg.Wait()
 
 }
