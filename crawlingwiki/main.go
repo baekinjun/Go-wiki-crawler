@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -50,10 +51,25 @@ func getRequest(url string) (*http.Response, error) { //url 에 헤더를 추가
 
 func extractLinks(doc *goquery.Document) []string {
 	foundUrls := []string{}
+	noduplicate := doc.Find("div#bodyContent")
+	re, _ := regexp.Compile(":")
+	re1, _ := regexp.Compile("/wiki/")
+	keys := make(map[string]bool)
+	dupleUrl := []string{}
 	if doc != nil {
-		doc.Find("a").Each(func(i int, s *goquery.Selection) {
+		noduplicate.Find("a").Each(func(i int, s *goquery.Selection) {
 			res, _ := s.Attr("href")
-			foundUrls = append(foundUrls, res)
+			if re.MatchString(res) == false && re1.MatchString(res) == true {
+				dupleUrl = append(foundUrls, res)
+				for _, value := range dupleUrl {
+					if _, saveValue := keys[value]; !saveValue {
+						keys[value] = true
+						foundUrls = append(foundUrls, value)
+					}
+				}
+				// foundUrls = append(foundUrls, res)
+				// fmt.Println(foundUrls)
+			}
 		})
 		return foundUrls
 	}
@@ -105,8 +121,9 @@ func targetpage(startURL string, concurrency int) []string {
 	seen := make(map[string]bool)
 	baseDomain := parseStartURL(startURL)
 
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 5; i++ {
 		list := <-worklist
+		fmt.Println(list)
 		for _, link := range list {
 			if !seen[link] {
 				seen[link] = true
@@ -133,7 +150,7 @@ func crawl(startURL string) {
 		os.Exit(1)
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 10; i++ {
 		resp, err := http.Get(target[i])
 
 		if err != nil {
@@ -157,7 +174,7 @@ func FindImageurl(startURL string) []string {
 	target := (targetpage(startURL, 2))
 	b := ScrapeResult{}
 	var image string
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 10; i++ {
 		resp, err := http.Get(target[i])
 
 		if err != nil {
@@ -189,7 +206,7 @@ func ImageDownload(startURL string) error {
 		log.Fatal(err)
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 10; i++ {
 		resp, err := http.Get(ImageURL[i])
 
 		if err != nil {
