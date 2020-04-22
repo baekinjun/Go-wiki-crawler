@@ -113,7 +113,7 @@ func targetpage(startURL string, concurrency int) []string {
 	seen := make(map[string]bool)
 	baseDomain := parseStartURL(startURL)
 
-	for i := 0; i < 5; i++ {
+	for ; n > 0; n-- {
 		list := <-worklist
 		fmt.Println(list)
 		for _, link := range list {
@@ -257,7 +257,7 @@ func AddFileTOS3(s *session.Session, fileDir string) error {
 
 func main() {
 
-	// crawl("https://ko.wikipedia.org/wiki/")
+	crawl("https://ko.wikipedia.org/wiki/")
 
 	ImageDownload("https://ko.wikipedia.org/wiki/")
 
