@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/aws/aws-sdk-go/aws"
@@ -132,7 +133,7 @@ func targetpage(startURL string, concurrency int) []string {
 	return foundLinks
 }
 
-func crawl(startURL string) {
+func crawl(startURL string, wg *sync.WaitGroup) {
 
 	conn, err := sql.Open("mysql", "root:qordls7410@tcp(localhost:3306)/WIKI")
 	target := (targetpage(startURL, 5))
@@ -187,7 +188,7 @@ func FindImageurl(startURL string) []string {
 	return b.ImageURL
 }
 
-func ImageDownload(startURL string) error {
+func ImageDownload(startURL string, wg *sync.WaitGroup) error {
 	Image := FindImageurl(startURL)
 	var ImageURL []string
 	for _, a := range Image {
@@ -256,9 +257,13 @@ func AddFileTOS3(s *session.Session, fileDir string) error {
 }
 
 func main() {
+	var wg sync.WaitGroup
+	wg.Add(2)
 
-	crawl("https://ko.wikipedia.org/wiki/")
+	go crawl("https://ko.wikipedia.org/wiki/", &wg)
 
-	ImageDownload("https://ko.wikipedia.org/wiki/")
+	go ImageDownload("https://ko.wikipedia.org/wiki/", &wg)
+
+	wg.Wait()
 
 }
