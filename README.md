@@ -41,3 +41,11 @@ _ "github.com/go-sql-driver/mysql" //golang 과 mysql을 연동
 
 `go get github.com/aws/aws-sdk-go/...`
 
+>  mysql db는 제 로컬로 되어있어서 바꿔야합니다.
+
+>  aws key 와 bucket name 이 제 개발서버로 되어있어서 바꾸어야 합니다. 
+
+#시작
+
+`go run main.go`
+
