@@ -2,11 +2,17 @@
 
 ###require packages
 "bytes" // 사진의 크기를 정해주기 위해사용
+
 "database/sql" //sql구문을 사용하기 위해 사용
+
 "fmt"
+
 "io" //사진을 저장하기위해 사용
+
 "log" //error 확인
+
 "net/http" //http를 가져올때 사용
+
 "net/url" // url문자열 조작
 "os" // 디렉토리 설정 
 "strconv" // string convert 패키지
@@ -18,7 +24,10 @@
 _ "github.com/go-sql-driver/mysql" //golang 과 mysql을 연동
 
 ##install 
-""" go get github.com/PuerkitoBio/goquery
-    go getgithub.com/go-sql-driver/mysql
-    go get github.com/aws/aws-sdk-go/...
-"""
+
+`go get github.com/PuerkitoBio/goquery`
+
+`go getgithub.com/go-sql-driver/mysql`
+
+`go get github.com/aws/aws-sdk-go/...`
+
