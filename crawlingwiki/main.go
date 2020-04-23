@@ -11,7 +11,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/aws/aws-sdk-go/aws"
@@ -113,10 +112,10 @@ func targetpage(startURL string, concurrency int) []string {
 	go func() { worklist <- []string{startURL} }()
 	seen := make(map[string]bool)
 	baseDomain := parseStartURL(startURL)
-
-	for ; n > 0; n-- {
+	// ; n > 0; n-- (<-모든 url을 가지고올때  for문에 대입)
+	for i := 0; i < 5; i++ {
 		list := <-worklist
-		fmt.Println(list)
+		// fmt.Println(list)
 		for _, link := range list {
 			if !seen[link] {
 				seen[link] = true
@@ -133,12 +132,13 @@ func targetpage(startURL string, concurrency int) []string {
 	return foundLinks
 }
 
-func crawl(startURL string, wg *sync.WaitGroup) {
+func crawl(startURL string) ([]string, []string) {
 
 	conn, err := sql.Open("mysql", "root:qordls7410@tcp(localhost:3306)/WIKI")
 	target := (targetpage(startURL, 5))
+	var connect []string
+	var connectDB string
 	b := ScrapeResult{}
-
 	if err != nil {
 		os.Exit(1)
 	}
@@ -153,43 +153,30 @@ func crawl(startURL string, wg *sync.WaitGroup) {
 		doc, err := goquery.NewDocumentFromReader(resp.Body)
 
 		b.title = doc.Find("h1.firstHeading").Text()
-		doc.Find("div.mw-parser-output p").Each(func(i int, s *goquery.Selection) {
-			b.text += s.Text()
-		})
-		conn.Exec("insert into wiki_data(Title,Text) value(?,?)", b.title, b.text)
-		b.text = " "
-
-	}
-	fmt.Print(target)
-}
-
-func FindImageurl(startURL string) []string {
-	target := (targetpage(startURL, 5))
-	b := ScrapeResult{}
-	for i := 0; i < len(target); i++ {
-		resp, err := http.Get(target[i])
-
-		if err != nil {
-			panic(err)
-		}
-		defer resp.Body.Close()
-
-		doc, err := goquery.NewDocumentFromReader(resp.Body)
-
 		doc.Find("img.thumbimage").Each(func(i int, s *goquery.Selection) {
 			image, ok := s.Attr("src")
 			if ok {
 				b.ImageURL = append(b.ImageURL, image)
+				connectDB += b.title + strconv.Itoa(i) + ","
+				connect = append(connect, b.title+strconv.Itoa(i))
 			} else {
 				b.ImageURL = append(b.ImageURL, "//upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Commons-logo.svg/30px-Commons-logo.svg.png")
+				connectDB = "No Image"
 			}
 		})
+		doc.Find("div.mw-parser-output p").Each(func(i int, s *goquery.Selection) {
+			b.text += s.Text()
+		})
+		conn.Exec("insert into wiki_data(Title,Text,connectimage) value(?,?,?)", b.title, b.text, connectDB)
+		b.text = " "
+		connectDB = " "
+
 	}
-	return b.ImageURL
+	return b.ImageURL, connect
 }
 
-func ImageDownload(startURL string, wg *sync.WaitGroup) error {
-	Image := FindImageurl(startURL)
+func ImageDownload(startURL string) error {
+	Image, connectname := crawl(startURL)
 	var ImageURL []string
 	for _, a := range Image {
 		ImageURL = append(ImageURL, "https:"+a)
@@ -209,7 +196,7 @@ func ImageDownload(startURL string, wg *sync.WaitGroup) error {
 
 		defer resp.Body.Close()
 
-		out, err := os.Create("img/" + strconv.Itoa(i) + ".jpg")
+		out, err := os.Create("img/" + connectname[i] + ".jpg")
 
 		if err != nil {
 			return err
@@ -219,7 +206,7 @@ func ImageDownload(startURL string, wg *sync.WaitGroup) error {
 
 		_, err = io.Copy(out, resp.Body)
 
-		err = AddFileTOS3(s, "img/"+strconv.Itoa(i)+".jpg")
+		err = AddFileTOS3(s, "img/"+connectname[i]+".jpg")
 
 		if err != nil {
 			log.Fatal(err)
@@ -227,6 +214,11 @@ func ImageDownload(startURL string, wg *sync.WaitGroup) error {
 	}
 
 	return nil
+}
+
+func crawling_wiki(startURL string) {
+
+	ImageDownload(startURL)
 }
 
 func AddFileTOS3(s *session.Session, fileDir string) error {
@@ -257,13 +249,5 @@ func AddFileTOS3(s *session.Session, fileDir string) error {
 }
 
 func main() {
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go crawl("https://ko.wikipedia.org/wiki/", &wg)
-
-	go ImageDownload("https://ko.wikipedia.org/wiki/", &wg)
-
-	wg.Wait()
-
+	crawling_wiki("https://ko.wikipedia.org/wiki/")
 }
