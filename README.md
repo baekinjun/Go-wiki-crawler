@@ -1,18 +1,12 @@
-#####golang cralwer 
+*#Golang crawler*
 
 ###require packages
 "bytes" // 사진의 크기를 정해주기 위해사용
-
 "database/sql" //sql구문을 사용하기 위해 사용
-
 "fmt"
-
 "io" //사진을 저장하기위해 사용
-
 "log" //error 확인
-
-"net/http" //http를 가져올때 사용
-
+"net/http" //http를 가져올때사용
 "net/url" // url문자열 조작
 "os" // 디렉토리 설정 
 "strconv" // string convert 패키지
@@ -22,6 +16,7 @@
 "github.com/aws/aws-sdk-go/aws/session" //aws관련
 "github.com/aws/aws-sdk-go/service/s3" //aws관련
 _ "github.com/go-sql-driver/mysql" //golang 과 mysql을 연동
+
 
 ##install 
 
