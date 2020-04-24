@@ -1,22 +1,22 @@
 package main
 
 import (
-	"bytes"
-	"database/sql"
+	"bytes"        // 사진의 크기를 정해주기 위해사용
+	"database/sql" //sql구문을 사용하기 위해 사용
 	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"net/url"
-	"os"
-	"strconv"
-	"strings"
+	"io"       //사진을 저장하기위해 사용
+	"log"      //error 확인
+	"net/http" //http를 가져올때 사용
+	"net/url"  // url문자열 조작
+	"os"       // 디렉토리 설정
+	"strconv"  // string convert 패키지
+	"strings"  // regexp 대신 사용 regexp는 실행시간이 길어질수도 있는 단점이 있다. (go언어 실전테크닉 참조)
 
-	"github.com/PuerkitoBio/goquery"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/PuerkitoBio/goquery"        //goquery html을 파싱
+	"github.com/aws/aws-sdk-go/aws"         //aws 관련
+	"github.com/aws/aws-sdk-go/aws/session" //aws관련
+	"github.com/aws/aws-sdk-go/service/s3"  //aws관련
+	_ "github.com/go-sql-driver/mysql"      //golang 과 mysql을 연동
 )
 
 const (
@@ -44,7 +44,7 @@ func getRequest(url string) (*http.Response, error) { //url 에 헤더를 추가
 	return res, nil
 }
 
-func extractLinks(doc *goquery.Document) []string {
+func extractLinks(doc *goquery.Document) []string { //페이지 내의 baseurl에 덧붙힐 extra주소 수집
 	foundUrls := []string{}
 	noduplicate := doc.Find("div#bodyContent")
 	keys := make(map[string]bool)
@@ -53,10 +53,10 @@ func extractLinks(doc *goquery.Document) []string {
 	if doc != nil {
 		noduplicate.Find("a").Each(func(i int, s *goquery.Selection) {
 			res, _ := s.Attr("href")
-			if strings.Contains(res, ":") == false && strings.Contains(res, "/wiki/") == true {
+			if strings.Contains(res, ":") == false && strings.Contains(res, "/wiki/") == true { // 위키피디아의 html분석결과 검색을 통한것들은 : 이포함되어 있지않고 /wiki/로 시작한다.
 				dupleUrl = append(foundUrls, res)
 				for _, value := range dupleUrl {
-					if _, saveValue := keys[value]; !saveValue {
+					if _, saveValue := keys[value]; !saveValue { //56~60 번째줄은 중복된것을 제거 하는것
 						keys[value] = true
 						foundUrls = append(foundUrls, value)
 					}
@@ -68,7 +68,7 @@ func extractLinks(doc *goquery.Document) []string {
 	return foundUrls
 }
 
-func resolveRelative(baseURL string, hrefs []string) []string {
+func resolveRelative(baseURL string, hrefs []string) []string { //문자열을 재조합하여 원하는 url을 가지고 온다.
 	internalUrls := []string{}
 
 	for _, href := range hrefs {
@@ -85,7 +85,7 @@ func resolveRelative(baseURL string, hrefs []string) []string {
 	return internalUrls
 }
 
-func crawlPage(baseURL, targetURL string, token chan struct{}) []string {
+func crawlPage(baseURL, targetURL string, token chan struct{}) []string { //baseurl과 target url을 합친다.
 
 	token <- struct{}{}
 	resp, _ := getRequest(targetURL)
@@ -98,12 +98,12 @@ func crawlPage(baseURL, targetURL string, token chan struct{}) []string {
 	return foundUrls
 }
 
-func parseStartURL(u string) string {
+func parseStartURL(u string) string { //net/url 패키지 기능의로 url의 구문을 분석하여 starturl을 얻는다.
 	parsed, _ := url.Parse(u)
 	return fmt.Sprintf("%s://%s", parsed.Scheme, parsed.Host)
 }
 
-func targetpage(startURL string, concurrency int) []string {
+func targetpage(startURL string, concurrency int) []string { // crawlpage를 계속 돌려(url이 소진시까지 ) targeturl을 가져온다.
 	var foundLinks []string
 	worklist := make(chan []string)
 	var n int
@@ -112,10 +112,9 @@ func targetpage(startURL string, concurrency int) []string {
 	go func() { worklist <- []string{startURL} }()
 	seen := make(map[string]bool)
 	baseDomain := parseStartURL(startURL)
-	// ; n > 0; n-- (<-모든 url을 가지고올때  for문에 대입)
-	for i := 0; i < 5; i++ {
+	// ; n > 0; n-- (<-모든 url을 가지고올때  for문에 대입) 모든 url이 소진시 멈춘다.
+	for i := 0; i < 10; i++ {
 		list := <-worklist
-		// fmt.Println(list)
 		for _, link := range list {
 			if !seen[link] {
 				seen[link] = true
@@ -132,8 +131,7 @@ func targetpage(startURL string, concurrency int) []string {
 	return foundLinks
 }
 
-func crawl(startURL string) ([]string, []string) {
-
+func crawl(startURL string) ([]string, []string) { // target url의 원하는데이터를 정제한후에  디비에 저장
 	conn, err := sql.Open("mysql", "root:qordls7410@tcp(localhost:3306)/WIKI")
 	target := (targetpage(startURL, 5))
 	var connect []string
@@ -142,9 +140,9 @@ func crawl(startURL string) ([]string, []string) {
 	if err != nil {
 		os.Exit(1)
 	}
+	fmt.Println(len(target))
 	for i := 0; i < len(target); i++ {
 		resp, err := http.Get(target[i])
-
 		if err != nil {
 			panic(err)
 		}
@@ -172,15 +170,17 @@ func crawl(startURL string) ([]string, []string) {
 		connectDB = " "
 
 	}
+
 	return b.ImageURL, connect
 }
 
-func ImageDownload(startURL string) error {
+func ImageDownloadandcrawl(startURL string) error { // imageurl을 받아서 image를 저장후 aws에 저장
 	Image, connectname := crawl(startURL)
 	var ImageURL []string
 	for _, a := range Image {
 		ImageURL = append(ImageURL, "https:"+a)
 	}
+	fmt.Println(len(ImageURL))
 
 	s, err := session.NewSession(&aws.Config{Region: aws.String(S3_REGION)})
 
@@ -216,12 +216,7 @@ func ImageDownload(startURL string) error {
 	return nil
 }
 
-func crawling_wiki(startURL string) {
-
-	ImageDownload(startURL)
-}
-
-func AddFileTOS3(s *session.Session, fileDir string) error {
+func AddFileTOS3(s *session.Session, fileDir string) error { //aws configure 를 통해 너드팩토리 서버로 접속 해야됨 aws에 저장
 
 	file, err := os.Open(fileDir)
 	if err != nil {
@@ -249,5 +244,5 @@ func AddFileTOS3(s *session.Session, fileDir string) error {
 }
 
 func main() {
-	crawling_wiki("https://ko.wikipedia.org/wiki/")
+	ImageDownloadandcrawl("https://ko.wikipedia.org/wiki/축구")
 }
