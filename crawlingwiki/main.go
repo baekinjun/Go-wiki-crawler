@@ -21,7 +21,7 @@ import (
 
 const (
 	S3_REGION = "ap-northeast-2"
-	S3_BUCKET = "gowiki"
+	S3_BUCKET = "gowiki" // s3저장소를 바꿔야한다.
 )
 
 type ScrapeResult struct {
@@ -133,6 +133,7 @@ func targetpage(startURL string, concurrency int) []string { // crawlpage를 계
 
 func crawl(startURL string) ([]string, []string) { // target url의 원하는데이터를 정제한후에  디비에 저장
 	conn, err := sql.Open("mysql", "root:qordls7410@tcp(localhost:3306)/WIKI")
+	// conn, err := sql.Open("mysql", "user:qordls741@tcp(master.cfhpxw7jhdhj.ap-northeast-2.rds.amazonaws.com:3306)/WIKI")
 	target := (targetpage(startURL, 5))
 	var connect []string
 	var connectDB string
@@ -140,8 +141,8 @@ func crawl(startURL string) ([]string, []string) { // target url의 원하는데
 	if err != nil {
 		os.Exit(1)
 	}
-	fmt.Println(len(target))
-	for i := 0; i < len(target); i++ {
+	fmt.Println("찾은페이지개수" + strconv.Itoa(len(target)))
+	for i := 1; i < len(target); i++ {
 		resp, err := http.Get(target[i])
 		if err != nil {
 			panic(err)
@@ -151,12 +152,12 @@ func crawl(startURL string) ([]string, []string) { // target url의 원하는데
 		doc, err := goquery.NewDocumentFromReader(resp.Body)
 
 		b.title = doc.Find("h1.firstHeading").Text()
-		doc.Find("img.thumbimage").Each(func(i int, s *goquery.Selection) {
+		doc.Find("img.thumbimage").Each(func(a int, s *goquery.Selection) {
 			image, ok := s.Attr("src")
 			if ok {
 				b.ImageURL = append(b.ImageURL, image)
-				connectDB += b.title + strconv.Itoa(i) + ","
-				connect = append(connect, b.title+strconv.Itoa(i))
+				connectDB += strconv.Itoa(i) + "_" + strconv.Itoa(a) + ","
+				connect = append(connect, strconv.Itoa(i)+"_"+strconv.Itoa(a))
 			} else {
 				b.ImageURL = append(b.ImageURL, "//upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Commons-logo.svg/30px-Commons-logo.svg.png")
 				connectDB = "No Image"
@@ -180,7 +181,7 @@ func ImageDownloadandcrawl(startURL string) error { // imageurl을 받아서 ima
 	for _, a := range Image {
 		ImageURL = append(ImageURL, "https:"+a)
 	}
-	fmt.Println(len(ImageURL))
+	fmt.Println("이미지개수" + strconv.Itoa(len(ImageURL)))
 
 	s, err := session.NewSession(&aws.Config{Region: aws.String(S3_REGION)})
 
@@ -244,5 +245,5 @@ func AddFileTOS3(s *session.Session, fileDir string) error { //aws configure 를
 }
 
 func main() {
-	ImageDownloadandcrawl("https://ko.wikipedia.org/wiki/축구")
+	ImageDownloadandcrawl("https://ko.wikipedia.org/wiki/가수")
 }
