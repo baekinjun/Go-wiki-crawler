@@ -56,7 +56,7 @@ func extractLinks(doc *goquery.Document) []string { //페이지 내의 baseurl�
 			if strings.Contains(res, ":") == false && strings.Contains(res, "/wiki/") == true { // 위키피디아의 html분석결과 검색을 통한것들은 : 이포함되어 있지않고 /wiki/로 시작한다.
 				dupleUrl = append(foundUrls, res)
 				for _, value := range dupleUrl {
-					if _, saveValue := keys[value]; !saveValue { //56~60 번째줄은 중복된것을 제거 하는것
+					if _, saveValue := keys[value]; !saveValue { //56~60 번째줄은 중복된 것을 제거 , 필요데이터만 수집할수 있는 규칙 로직 추가
 						keys[value] = true
 						foundUrls = append(foundUrls, value)
 					}
