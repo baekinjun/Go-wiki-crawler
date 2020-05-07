@@ -133,16 +133,23 @@ func targetpage(startURL string, concurrency int) []string { // crawlpage를 계
 
 func crawl(startURL string) ([]string, []string) { // target url의 원하는데이터를 정제한후에  디비에 저장
 	conn, err := sql.Open("mysql", "root:qordls7410@tcp(localhost:3306)/WIKI")
-	// conn, err := sql.Open("mysql", "user:qordls741@tcp(master.cfhpxw7jhdhj.ap-northeast-2.rds.amazonaws.com:3306)/WIKI")
+	// conn, err := sql.Open("mysql", "user:qordls741@tcp(master.cfhpxw7jhdhj.ap-northeast-2.rds.amazonaws.com:3306)/WIKI") //너드팩토리 RDS 주소 를 넣어야 한다.
 	target := (targetpage(startURL, 5))
 	var connect []string
+	var title []string
 	var connectDB string
+	num := 0
+	con := 1
 	b := ScrapeResult{}
 	if err != nil {
 		os.Exit(1)
 	}
 	fmt.Println("찾은페이지개수" + strconv.Itoa(len(target)))
-	for i := 1; i < len(target); i++ {
+	defer func() {
+		v := recover()
+		fmt.Println("recovered:", v)
+	}()
+	for i := 0; i < len(target); i++ {
 		resp, err := http.Get(target[i])
 		if err != nil {
 			panic(err)
@@ -152,12 +159,16 @@ func crawl(startURL string) ([]string, []string) { // target url의 원하는데
 		doc, err := goquery.NewDocumentFromReader(resp.Body)
 
 		b.title = doc.Find("h1.firstHeading").Text()
+		title = append(title, b.title)
+		if i > 0 && title[num] == b.title { //다른 url이지만 같은 내용일경우 중복데이터 제거
+			continue
+		}
 		doc.Find("img.thumbimage").Each(func(a int, s *goquery.Selection) {
 			image, ok := s.Attr("src")
 			if ok {
 				b.ImageURL = append(b.ImageURL, image)
-				connectDB += strconv.Itoa(i) + "_" + strconv.Itoa(a) + ","
-				connect = append(connect, strconv.Itoa(i)+"_"+strconv.Itoa(a))
+				connectDB += strconv.Itoa(con) + "_" + strconv.Itoa(a) + ","
+				connect = append(connect, strconv.Itoa(con)+"_"+strconv.Itoa(a))
 			} else {
 				b.ImageURL = append(b.ImageURL, "//upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Commons-logo.svg/30px-Commons-logo.svg.png")
 				connectDB = "No Image"
@@ -166,10 +177,21 @@ func crawl(startURL string) ([]string, []string) { // target url의 원하는데
 		doc.Find("div.mw-parser-output p").Each(func(i int, s *goquery.Selection) {
 			b.text += s.Text()
 		})
-		conn.Exec("insert into wiki_data(Title,Text,connectimage) value(?,?,?)", b.title, b.text, connectDB)
+
+		if strings.Contains(b.text, "다음 뜻으로 쓰인다.") == true || strings.Contains(b.text, "다른 뜻은 다음과 같다.") == true {
+			doc.Find("div.mw-parser-output li").Each(func(a int, s *goquery.Selection) {
+				b.text += s.Text()
+			})
+			conn.Exec("insert into wiki_synonynom(name,mean,connectimage) valuew (?,?,?)", b.title, b.text, connectDB)
+
+		} else {
+			conn.Exec("insert into wiki_data(Title,Text,connectimage) value(?,?,?)", b.title, b.text, connectDB)
+		}
 		b.text = " "
 		connectDB = " "
 
+		num++
+		con++
 	}
 
 	return b.ImageURL, connect
@@ -245,5 +267,7 @@ func AddFileTOS3(s *session.Session, fileDir string) error { //aws configure 를
 }
 
 func main() {
-	ImageDownloadandcrawl("https://ko.wikipedia.org/wiki/가수")
+
+	ImageDownloadandcrawl("https://ko.wikipedia.org/wiki/눈_(해부학)")
+
 }

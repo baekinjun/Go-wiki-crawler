@@ -19,7 +19,7 @@
 
 "strconv" // string convert 패키지
 
-"strings" // regexp 대신 사용 regexp는 실행시간이 길어질수도 있는 단점이 있다. (go언어 실전테크닉 참조)
+"strings" // regexp 대신 사용 regexp는 실행시간이 길어질수도 있는 단점이 있다. 정규식 regexp사용 피하기 (go언어 실전테크닉 참조)
 
 "github.com/PuerkitoBio/goquery" //goquery html을 파싱
 
@@ -41,9 +41,9 @@ _ "github.com/go-sql-driver/mysql" //golang 과 mysql을 연동
 
 `go get github.com/aws/aws-sdk-go/...`
 
->  mysql db는 제 로컬로 되어있어서 바꿔야합니다.
+>  mysql db는 제 로컬로 되어있어서 바꿔야합니다. -주석 처리 해놓았습니다. 바꾸어야 할부분
 
->  aws key 와 bucket name 이 제 개발서버로 되어있어서 바꾸어야 합니다. 
+>  aws key 와 bucket name 이 제 개발서버로 되어있어서 바꾸어야 합니다. -주석 처리 해놓았습니다. 바꾸어야 할부분
 
 #시작
 
