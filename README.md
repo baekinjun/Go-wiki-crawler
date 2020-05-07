@@ -49,3 +49,6 @@ _ "github.com/go-sql-driver/mysql" //golang 과 mysql을 연동
 
 `go run main.go`
 
+#결과
+<img width="795" alt="스크린샷 2020-05-07 오후 5 55 51" src="https://user-images.githubusercontent.com/58027908/81275359-863a2480-908c-11ea-8a4e-0d659e26fedc.png">
+
